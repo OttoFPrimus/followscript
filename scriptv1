@@ -1,0 +1,166 @@
+
+-- LocalScript
+-- Place in StarterPlayer > StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local Target = nil
+local Following = false
+local Connection = nil
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "FollowGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.fromOffset(230, 170)
+Frame.Position = UDim2.new(0.5, -115, 0.5, -85)
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 10)
+Corner.Parent = Frame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundTransparency = 1
+Title.Text = "Player Follow"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.TextSize = 18
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Frame
+
+local TargetLabel = Instance.new("TextLabel")
+TargetLabel.Position = UDim2.fromOffset(10, 40)
+TargetLabel.Size = UDim2.new(1, -20, 0, 25)
+TargetLabel.BackgroundTransparency = 1
+TargetLabel.Text = "Target: None"
+TargetLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+TargetLabel.TextSize = 13
+TargetLabel.Font = Enum.Font.Gotham
+TargetLabel.Parent = Frame
+
+local function MakeButton(text, position)
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(1, -20, 0, 35)
+    Button.Position = position
+    Button.BackgroundColor3 = Color3.fromRGB(65, 95, 180)
+    Button.TextColor3 = Color3.new(1, 1, 1)
+    Button.Text = text
+    Button.TextSize = 14
+    Button.Font = Enum.Font.GothamBold
+    Button.Parent = Frame
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 6)
+    Corner.Parent = Button
+
+    return Button
+end
+
+local ClosestButton = MakeButton(
+    "Target Closest Player",
+    UDim2.fromOffset(10, 75)
+)
+
+local FollowButton = MakeButton(
+    "Follow: OFF",
+    UDim2.fromOffset(10, 118)
+)
+
+local function GetCharacter(player)
+    return player and player.Character
+end
+
+-- Find closest player
+ClosestButton.MouseButton1Click:Connect(function()
+    local MyCharacter = GetCharacter(LocalPlayer)
+    local MyRoot = MyCharacter and MyCharacter:FindFirstChild("HumanoidRootPart")
+
+    if not MyRoot then return end
+
+    local Closest = nil
+    local ShortestDistance = math.huge
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local Character = GetCharacter(player)
+            local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+            local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+
+            if Root and Humanoid and Humanoid.Health > 0 then
+                local Distance = (Root.Position - MyRoot.Position).Magnitude
+
+                if Distance < ShortestDistance then
+                    ShortestDistance = Distance
+                    Closest = player
+                end
+            end
+        end
+    end
+
+    Target = Closest
+
+    TargetLabel.Text = Target
+        and "Target: " .. Target.DisplayName
+        or "Target: None"
+end)
+
+-- Follow toggle
+FollowButton.MouseButton1Click:Connect(function()
+    Following = not Following
+
+    FollowButton.Text = Following and "Follow: ON" or "Follow: OFF"
+    FollowButton.BackgroundColor3 = Following
+        and Color3.fromRGB(45, 155, 90)
+        or Color3.fromRGB(65, 95, 180)
+end)
+
+-- Movement synchronization
+Connection = RunService.RenderStepped:Connect(function()
+    if not Following or not Target then return end
+
+    local MyCharacter = GetCharacter(LocalPlayer)
+    local TargetCharacter = GetCharacter(Target)
+
+    if not MyCharacter or not TargetCharacter then return end
+
+    local MyRoot = MyCharacter:FindFirstChild("HumanoidRootPart")
+    local TargetRoot = TargetCharacter:FindFirstChild("HumanoidRootPart")
+
+    local MyHumanoid = MyCharacter:FindFirstChildOfClass("Humanoid")
+    local TargetHumanoid = TargetCharacter:FindFirstChildOfClass("Humanoid")
+
+    if not MyRoot or not TargetRoot or not MyHumanoid or not TargetHumanoid then
+        return
+    end
+
+    -- Copy target orientation and movement position
+    MyRoot.CFrame = TargetRoot.CFrame
+
+    -- Copy jumping
+    if TargetHumanoid:GetState() == Enum.HumanoidStateType.Jumping then
+        if MyHumanoid.FloorMaterial ~= Enum.Material.Air then
+            MyHumanoid.Jump = true
+        end
+    end
+end)
+
+-- Cleanup
+Players.PlayerRemoving:Connect(function(player)
+    if player == Target then
+        Target = nil
+        Following = false
+        FollowButton.Text = "Follow: OFF"
+        TargetLabel.Text = "Target: None"
+    end
+end)
